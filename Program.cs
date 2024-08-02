@@ -1,8 +1,9 @@
-﻿using AutoGen.DotnetInteractive;
+﻿using dotnet_interactive_agent;
 using Microsoft.DotNet.Interactive;
 using Microsoft.DotNet.Interactive.Commands;
 using Microsoft.DotNet.Interactive.CSharp;
 using Microsoft.DotNet.Interactive.Events;
+using Microsoft.DotNet.Interactive.Formatting;
 using Microsoft.DotNet.Interactive.Jupyter;
 using System.Reflection;
 
@@ -14,34 +15,18 @@ await interactiveService.StartAsync(cwd);
 // get kernel using reflection
 // interactiveService.kernel is private
 var kernel = interactiveService.GetType().GetField("kernel", BindingFlags.NonPublic | BindingFlags.Instance)?.GetValue(interactiveService) as Kernel;
-
 if (kernel is null)
 {
     Console.WriteLine("Failed to get kernel");
     return;
 }
 
-// print all subkernels
-foreach (var subKernel in kernel.SubkernelsAndSelf())
-{
-    Console.WriteLine(subKernel.Name);
-}
-
-// connet jupyter kernel
-var venv = ".venv";
-var magicCommand = $"#!connect jupyter --kernel-name python --kernel-spec {venv}";
-var connectCommand = new SubmitCode(magicCommand);
-var connectResult = await kernel.SendAsync(connectCommand);
-PrintDisplayValue(connectResult);
-
-
-
-// run python code
+//run python code
 var pythonCode = @"
 print('Hello from Python')
 ";
 
-var pythonCodeCommand = new SubmitCode(pythonCode, "python");
+var pythonCodeCommand = new SubmitCode(pythonCode, "pythonkernel");
 var pythonResult = await kernel.SendAsync(pythonCodeCommand);
 PrintDisplayValue(pythonResult);
 
@@ -72,14 +57,6 @@ var pwshCodeCommand = new SubmitCode(code, "pwsh");
 result = await kernel.SendAsync(pwshCodeCommand);
 PrintDisplayValue(result);
 
-// run html code
-code = @"
-    <h1>Hello from HTML</h1>
-    ";
-
-var htmlCodeCommand = new SubmitCode(code, "html");
-result = await kernel.SendAsync(htmlCodeCommand);
-PrintDisplayValue(result);
 
 
 void PrintDisplayValue(KernelCommandResult result)
