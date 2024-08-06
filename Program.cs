@@ -32,6 +32,7 @@ PrintDisplayValue(pythonResult);
 
 // run csharp code
 var code = """
+    #r "nuget:Microsoft.Data.Analysis,0.4.0"
     Console.WriteLine("Hello from C#");
     """;
 
@@ -50,6 +51,8 @@ PrintDisplayValue(result);
 
 // run pwsh code
 code = @"
+    $PSHOME
+    Import-Module Microsoft.PowerShell.Utility
     Write-Host 'Hello from PowerShell'
     ";
 

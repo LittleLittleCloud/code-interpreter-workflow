@@ -7,7 +7,12 @@ using System.Reflection;
 using Microsoft.DotNet.Interactive;
 using Microsoft.DotNet.Interactive.Commands;
 using Microsoft.DotNet.Interactive.Connection;
+using Microsoft.DotNet.Interactive.CSharp;
 using Microsoft.DotNet.Interactive.Events;
+using Microsoft.DotNet.Interactive.FSharp;
+using Microsoft.DotNet.Interactive.Jupyter;
+using Microsoft.DotNet.Interactive.PackageManagement;
+using Microsoft.DotNet.Interactive.PowerShell;
 using Microsoft.DotNet.Interactive.Utility;
 
 namespace dotnet_interactive_agent;
@@ -112,60 +117,56 @@ public class InteractiveService : IDisposable
     {
         try
         {
-            var url = KernelHost.CreateHostUriForCurrentProcessId();
             var compositeKernel = new CompositeKernel("composite");
-            var cmd = new string[]
-            {
-                    "dotnet",
-                    "tool",
-                    "run",
-                    "dotnet-interactive",
-                    $"[cb-{Process.GetCurrentProcess().Id}]",
-                    "stdio",
-                    //"--default-kernel",
-                    //"csharp",
-                    "--working-dir",
-                    $@"""{workingDirectory}""",
-            };
-            var connector = new StdIoKernelConnector(
-                cmd,
-                "root-proxy",
-                url,
-                new DirectoryInfo(workingDirectory));
 
-            // Start the dotnet-interactive tool and get a proxy for the root composite kernel therein.
-            var rootProxyKernel = await connector.CreateRootProxyKernelAsync().ConfigureAwait(false);
-            
-
-            // Get proxies for each subkernel present inside the dotnet-interactive tool.
-            var requestKernelInfoCommand = new RequestKernelInfo(rootProxyKernel.KernelInfo.RemoteUri);
-            var result =
-                await rootProxyKernel.SendAsync(
-                    requestKernelInfoCommand,
-                    ct).ConfigureAwait(false);
-
-            var subKernels = result.Events.OfType<KernelInfoProduced>();
-
-            foreach (var kernelInfoProduced in result.Events.OfType<KernelInfoProduced>())
-            {
-                var kernelInfo = kernelInfoProduced.KernelInfo;
-                if (kernelInfo is not null)
+            // create csharp kernel
+            var csharpKernel = new CSharpKernel()
+                .UseNugetDirective((k, resolvedPackageReference) =>
                 {
-                    var proxyKernel = await connector.CreateProxyKernelAsync(kernelInfo).ConfigureAwait(false);
-                    compositeKernel.Add(proxyKernel);
-                }
-            }
+
+                    k.AddAssemblyReferences(resolvedPackageReference
+                        .SelectMany(r => r.AssemblyPaths));
+                    return Task.CompletedTask;
+                })
+                .UseKernelHelpers()
+                .UseWho()
+                .UseMathAndLaTeX()
+                .UseValueSharing();
+
+            compositeKernel.Add(csharpKernel, ["c#", "C#"]);
+
+            // create fsharp kernel
+            var fsharpKernel = new FSharpKernel()
+                .UseDefaultFormatting()
+                .UseKernelHelpers()
+                .UseWho()
+                .UseMathAndLaTeX()
+                .UseValueSharing();
+
+            compositeKernel.Add(fsharpKernel, ["f#", "F#"]);
+
+            // create powershell kernel
+            var powershellKernel = new PowerShellKernel()
+                .UseProfiles()
+                .UseValueSharing();
+            compositeKernel.Add(powershellKernel, ["pwsh", "powershell"]);
+
+            var kernel = compositeKernel
+                .UseDefaultMagicCommands()
+                .UseImportMagicCommand();
+
+            // add jupyter connector
+            kernel.AddKernelConnector(
+                new ConnectJupyterKernelCommand()
+                .AddConnectionOptions(new JupyterLocalKernelConnectionOptions()));
 
             // add python kernel
-            var venv = "my_venv";
+            var venv = "myenv";
             var magicCommand = $"#!connect jupyter --kernel-name pythonkernel --kernel-spec {venv}";
-            var connectCommand = new SubmitCode(magicCommand, ".NET");
-            var connectResult = await compositeKernel.SendAsync(connectCommand);
-            // get pythonkernel
-            var pythonKernel = await connector.CreateProxyKernelAsync("pythonkernel");
-            compositeKernel.Add(pythonKernel);
+            var connectCommand = new SubmitCode(magicCommand);
+            var connectResult = await kernel.SendAsync(connectCommand);
 
-            return compositeKernel;
+            return kernel;
         }
         catch (CommandLineInvocationException) when (restoreWhenFail)
         {

@@ -14,6 +14,7 @@
 	  <PackageReference Include="AutoGen.SourceGenerator" Version="0.0.17" />
 	  <PackageReference Include="Microsoft.DotNet.Interactive" Version="1.0.0-beta.24229.4" />
 	  <PackageReference Include="Microsoft.DotNet.Interactive.Jupyter" Version="1.0.0-beta.24229.4" />
+	  <PackageReference Include="Microsoft.DotNet.Interactive.PackageManagement" Version="1.0.0-beta.24229.4" />
   </ItemGroup>
 
 </Project>
