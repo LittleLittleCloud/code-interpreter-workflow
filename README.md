@@ -1,4 +1,4 @@
-## Human-in-the-loop Code Interprete workflow
+## Human-in-the-loop Code Interpreter workflow
 
 ```mermaid
 flowchart TD
