@@ -47,11 +47,8 @@ To accomplish the task of downloading stock prices for AAPL, META, and MSFT from
 
 Here's the complete code:
 
-```python
 %pip install yfinance
-```
 
-```python
 import yfinance as yf
 import pandas as pd
 
@@ -70,7 +67,6 @@ print("Stock prices saved to 'stock_prices.csv'.")
 # Open the CSV file in VSCode
 import os
 os.system("code stock_prices.csv")
-```
 
 This script will:
 1. Install the `yfinance` package.
@@ -82,9 +78,7 @@ Make sure to run this code in an environment where you have access to VSCode and
 
 Execution Result:
 [Python Code Block]
-```python
 %pip install yfinance
-```
 
 [Execute Result]
 Requirement already satisfied: yfinance in c:\users\xiaoyuz\appdata\local\anaconda3\lib\site-packages (0.2.41)Note: you may need to restart the kernel to use updated packages.
@@ -111,7 +105,6 @@ Requirement already satisfied: urllib3<3,>=1.21.1 in c:\users\xiaoyuz\appdata\lo
 Requirement already satisfied: certifi>=2017.4.17 in c:\users\xiaoyuz\appdata\local\anaconda3\lib\site-packages (from requests>=2.31->yfinance) (2024.6.2)
 
 [Python Code Block]
-```python
 import yfinance as yf
 import pandas as pd
 
@@ -130,7 +123,6 @@ print("Stock prices saved to 'stock_prices.csv'.")
 # Open the CSV file in VSCode
 import os
 os.system("code stock_prices.csv")
-```
 
 [Execute Result]
 [                       0%%                      ]
