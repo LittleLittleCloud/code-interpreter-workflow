@@ -45,6 +45,28 @@ await foreach (var msg in groupChat.SendAsync(chatHistory, maxRound: 20))
     if (msg is EventMessage finalReply && finalReply.Type == EventType.Succeeded)
     {
         Console.WriteLine("Chat completed successfully");
+        var userTask = finalReply.Properties["task"];
+        var code = finalReply.Properties["code"];
+
+        // code execution result
+        var result = finalReply.Properties["result"];
+        var finalAnswer = finalReply.GetContent()!;
+
+        finalAnswer = $"""
+            Task:
+            {userTask}
+
+            Code:
+            {code}
+
+            Execution Result:
+            {result}
+
+            Final Answer:
+            {finalAnswer}
+            """;
+        
+        Console.WriteLine(finalAnswer);
         break;
     }
 
