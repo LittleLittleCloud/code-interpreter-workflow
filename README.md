@@ -21,6 +21,7 @@ web ---> | search_solution_result | coder
     - to install jupyter, run `pip install jupyter`
     - to install ipykernel, run `pip install ipykernel`
     - to setup ipykernel, run `python -m ipykernel install --user --name=python3`
+    - to confirm the setup, run `jupyter kernelspec list` and you should see `python3` in the list
 - env:OPENAI_API_KEY
 - env:BING_API_KEY
 
