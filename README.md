@@ -1,4 +1,4 @@
-Human-in-the-loop Code Interprete workflow
+## Human-in-the-loop Code Interprete workflow
 
 ```mermaid
 flowchart TD
@@ -12,4 +12,17 @@ assistant ---> | generate_final_reply | user
 assistant ---> | fix_error | coder
 coder ---> | search_solution | web
 web ---> | search_solution_result | coder
+```
+
+## Get start
+### Pre-requisite
+- dotnet 8.0
+- env:OPENAI_API_KEY
+- env:BING_API_KEY
+
+### Run the demo
+cd to the current directory and
+
+```bash
+dotnet run
 ```
