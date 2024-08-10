@@ -1,76 +1,57 @@
-﻿using dotnet_interactive_agent;
-using Microsoft.DotNet.Interactive;
-using Microsoft.DotNet.Interactive.Commands;
-using Microsoft.DotNet.Interactive.CSharp;
-using Microsoft.DotNet.Interactive.Events;
-using Microsoft.DotNet.Interactive.Formatting;
-using Microsoft.DotNet.Interactive.Jupyter;
-using System.Reflection;
+﻿using AutoGen.Core;
+using AutoGen.DotnetInteractive;
+using Azure.AI.OpenAI;
+using dotnet_interactive_agent;
+using dotnet_interactive_agent.Agent;
 
-var cwd = System.IO.Directory.GetCurrentDirectory();
-using var interactiveService = new InteractiveService(cwd);
+using var kernel = DotnetInteractiveKernelBuilder
+    .CreateDefaultInProcessKernelBuilder()
+    .AddPowershellKernel()
+    .AddPythonKernel("python3")
+    .Build();
 
-await interactiveService.StartAsync(cwd);
+var openAIApiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY") ?? throw new ArgumentNullException("OPENAI_API_KEY is not found");
+var model = "gpt-4o-mini";
+var openAIClient = new OpenAIClient(openAIApiKey);
 
-// get kernel using reflection
-// interactiveService.kernel is private
-var kernel = interactiveService.GetType().GetField("kernel", BindingFlags.NonPublic | BindingFlags.Instance)?.GetValue(interactiveService) as Kernel;
-if (kernel is null)
-{
-    Console.WriteLine("Failed to get kernel");
-    return;
-}
+var BING_API_KEY = Environment.GetEnvironmentVariable("BING_API_KEY") ?? throw new ArgumentNullException("BING_API_KEY is not found");
 
-//run python code
-var pythonCode = @"
-print('Hello from Python')
-";
+var coder = Coder.CreateFromOpenAI(openAIClient, model);
+var user = User.CreateFromOpenAI(openAIClient, model);
+var assistant = Assistant.CreateFromOpenAI(openAIClient, model);
+var runner = Runner.CreateFromOpenAI(kernel);
+var webSearch = WebSearch.CreateFromOpenAI(openAIClient, model, BING_API_KEY);
 
-var pythonCodeCommand = new SubmitCode(pythonCode, "pythonkernel");
-var pythonResult = await kernel.SendAsync(pythonCodeCommand);
-PrintDisplayValue(pythonResult);
+var orchestrator = new EventDrivenOrchestrator(user, assistant, runner, coder, webSearch);
 
-// run csharp code
-var code = """
-    #r "nuget:Microsoft.Data.Analysis,0.4.0"
-    Console.WriteLine("Hello from C#");
+var groupChat = new GroupChat(
+    members: [coder, user, assistant, runner],
+    orchestrator: orchestrator);
+
+var task = """
+    Download AAPL/META/MSFT stock price from Yahoo Finance and save it to a CSV file. Then open it in VSCode.
     """;
 
-var csharpCodeCommand = new SubmitCode(code, "csharp");
-var result = await kernel.SendAsync(csharpCodeCommand);
-PrintDisplayValue(result);
-
-// run fsharp code
-code = """
-    printfn "Hello from F#"
-    """;
-
-var fsharpCodeCommand = new SubmitCode(code, "fsharp");
-result = await kernel.SendAsync(fsharpCodeCommand);
-PrintDisplayValue(result);
-
-// run pwsh code
-code = @"
-    $PSHOME
-    Import-Module Microsoft.PowerShell.Utility
-    Write-Host 'Hello from PowerShell'
-    ";
-
-var pwshCodeCommand = new SubmitCode(code, "pwsh");
-result = await kernel.SendAsync(pwshCodeCommand);
-PrintDisplayValue(result);
-
-
-
-void PrintDisplayValue(KernelCommandResult result)
+var chatHistory = new List<IMessage>()
 {
-    var displayValues = result.Events.Where(x => x is StandardErrorValueProduced || x is StandardOutputValueProduced || x is ReturnValueProduced || x is DisplayedValueProduced)
-                    .SelectMany(x => (x as DisplayEvent)!.FormattedValues);
-
-    if (displayValues is null || displayValues.Count() == 0)
+    new TextMessage(Role.Assistant, task, user.Name).ToEventMessage(EventType.CreateTask, new Dictionary<string, string>()
     {
-        return;
+        ["task"] = task,
+    }),
+};
+
+await foreach (var msg in groupChat.SendAsync(chatHistory, maxRound: 20))
+{
+    if (msg is EventMessage finalReply && finalReply.Type == EventType.Succeeded)
+    {
+        Console.WriteLine("Chat completed successfully");
+        break;
     }
 
-    Console.WriteLine(string.Join("\n", displayValues.Select(x => x.Value)));
+    if (msg is EventMessage notCodingTask && notCodingTask.Type == EventType.NotCodingTask)
+    {
+        Console.WriteLine("Exit chat because the task is not coding task");
+        break;
+    }
 }
+

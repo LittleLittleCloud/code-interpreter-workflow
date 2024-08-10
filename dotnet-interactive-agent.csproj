@@ -6,15 +6,14 @@
     <RootNamespace>dotnet_interactive_agent</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+	  <NoWarn>SKEXP0050</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
-	  <PackageReference Include="AutoGen" Version="0.0.17" />
-	  <PackageReference Include="AutoGen.DotnetInteractive" Version="0.0.17" />
-	  <PackageReference Include="AutoGen.SourceGenerator" Version="0.0.17" />
-	  <PackageReference Include="Microsoft.DotNet.Interactive" Version="1.0.0-beta.24229.4" />
-	  <PackageReference Include="Microsoft.DotNet.Interactive.Jupyter" Version="1.0.0-beta.24229.4" />
-	  <PackageReference Include="Microsoft.DotNet.Interactive.PackageManagement" Version="1.0.0-beta.24229.4" />
+	  <PackageReference Include="AutoGen" Version="0.0.17-nightly-10328242505" />
+	  <PackageReference Include="AutoGen.DotnetInteractive" Version="0.0.17-nightly-10328242505" />
+	  <PackageReference Include="AutoGen.SourceGenerator" Version="0.0.17-nightly-10328242505" />
+	  <PackageReference Include="Microsoft.SemanticKernel.Plugins.Web" Version="1.16.1-alpha" />
   </ItemGroup>
 
 </Project>
