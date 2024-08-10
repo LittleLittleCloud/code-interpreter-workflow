@@ -97,8 +97,6 @@ internal class Runner : IAgent, IDisposable
             }
 
             Console.WriteLine(sb.ToString());
-
-
             return new TextMessage(Role.Assistant, sb.ToString(), this.Name)
                 .ToEventMessage(EventType.ExecuteResult, new Dictionary<string, string>()
                 {

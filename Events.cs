@@ -38,6 +38,11 @@ public class EventMessage : IMessage, ICanGetTextContent
     {
         return Message.GetContent();
     }
+
+    public override string ToString()
+    {
+        return Message?.ToString() ?? string.Empty;
+    }
 }
 
 public static class MessageExtension
