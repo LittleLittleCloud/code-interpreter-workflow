@@ -10,9 +10,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-	  <PackageReference Include="AutoGen" Version="0.0.17-nightly-10328242505" />
-	  <PackageReference Include="AutoGen.DotnetInteractive" Version="0.0.17-nightly-10328242505" />
-	  <PackageReference Include="AutoGen.SourceGenerator" Version="0.0.17-nightly-10328242505" />
+	  <PackageReference Include="AutoGen" Version="0.1.0" />
+	  <PackageReference Include="AutoGen.DotnetInteractive" Version="0.1.0" />
+	  <PackageReference Include="AutoGen.SourceGenerator" Version="0.1.0" />
 	  <PackageReference Include="Microsoft.PowerShell.SDK" Version="7.4.4" />
 	  <PackageReference Include="Microsoft.SemanticKernel.Plugins.Web" Version="1.16.1-alpha" />
   </ItemGroup>
