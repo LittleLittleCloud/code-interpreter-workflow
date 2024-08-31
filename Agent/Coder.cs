@@ -31,10 +31,10 @@ internal class Coder : IAgent
     public async Task<IMessage> GenerateReplyAsync(IEnumerable<IMessage> messages, GenerateReplyOptions? options = null, CancellationToken cancellationToken = default)
     {
         var lastMessage = messages.Last() ?? throw new InvalidOperationException("No message to reply to");
-
-        if (lastMessage.GetState() is State createTask
-            && createTask.CurrentStep == Step.CreateTask
-            && createTask.Task is string task)
+        var lastState = messages.LastOrDefault()?.GetState();
+        if (lastState is State writeCode
+            && writeCode.CurrentStep == Step.WriteCode
+            && writeCode.Task is string task)
         {
             var prompt = $"""
                 You are a helpful coder agent, you resolve tasks using python, powershell or csharp code.
@@ -64,44 +64,24 @@ internal class Coder : IAgent
                 If the task can be resolved by writing code, please write the code. Otherwise, say 'I cannot resolve this task using code'.
                 """;
 
-            var reply = await this._innerAgent.SendAsync(prompt, [], cancellationToken);
-
-            if (reply.GetContent()?.ToLower().Contains("i cannot resolve this task using code") is true)
-            {
-                var noCodingState = new State
-                {
-                    CurrentStep = Step.NotCodingTask,
-                    Task = task,
-                };
-
-                return noCodingState.ToTextMessage(this.Name);
-            }
-
-            var state = new State
-            {
-                CurrentStep = Step.WriteCode,
-                Task = task,
-                Code = reply.GetContent()!,
-            };
-
-            return state.ToTextMessage(this.Name);
+            return await this._innerAgent.SendAsync(prompt, [], cancellationToken);
         }
 
-        if (lastMessage.GetState() is State fixError
-            && fixError.CurrentStep == Step.FixCodeError
-            && fixError.Task is string task2
-            && fixError.Code is string code
-            && fixError.Error is string error)
+        if (lastState is State fixCode
+            && fixCode.CurrentStep == Step.FixCodeError
+            && fixCode.Task is string
+            && fixCode.Code is string
+            && fixCode.Error is string)
         {
             var prompt = $"""
                 ### Task
-                {task2}
+                {fixCode.Task}
 
                 ### Code
-                {code}
+                {fixCode.Code}
 
                 ### Error
-                {error}
+                {fixCode.Error}
 
                 Your task is to fix the error in the code. Please write the corrected code and put it in a code block.
 
@@ -112,42 +92,20 @@ internal class Coder : IAgent
                 If you need search web for solution, say 'I need to search for solution'.
                 """;
 
-            var reply = await this._innerAgent.SendAsync(prompt, [], cancellationToken);
-
-            if (reply.GetContent()?.ToLower().Contains("search for solution") is true)
-            {
-                var searchSolutionState = new State
-                {
-                    CurrentStep = Step.SearchSolution,
-                    Task = task2,
-                    Code = code,
-                    Error = error,
-                };
-
-                return searchSolutionState.ToTextMessage(this.Name);
-            }
-
-            var state = new State
-            {
-                CurrentStep = Step.WriteCode,
-                Task = task2,
-                Code = reply.GetContent()!,
-            };
-
-            return state.ToTextMessage(this.Name);
+            return await this._innerAgent.SendAsync(prompt, [], cancellationToken);
         }
 
-        if (lastMessage.GetState() is State improveCode
-            && improveCode.CurrentStep == Step.ImproveCode
-            && improveCode.Code is string code2
-            && improveCode.Comment is string comment)
+        if (lastState is State fixComment
+            && fixComment.CurrentStep == Step.FixComment
+            && fixComment.Code is string
+            && fixComment.Comment is string)
         {
             var prompt = $"""
                 ### Code
-                {code2}
+                {fixComment.Code}
 
                 ### Improvement
-                {comment}
+                {fixComment.Comment}
 
                 Your task is to improve the code based on suggestions. Please write the improved code and put it in a code block.
 
@@ -156,15 +114,7 @@ internal class Coder : IAgent
                 ```
                 """;
 
-            var reply = await this._innerAgent.SendAsync(prompt, [], cancellationToken);
-            var state = new State
-            {
-                CurrentStep = Step.WriteCode,
-                Task = improveCode.Task,
-                Code = reply.GetContent()!,
-            };
-
-            return state.ToTextMessage(this.Name);
+            return await this._innerAgent.SendAsync(prompt, [], cancellationToken);
         }
 
         throw new InvalidOperationException("Unexpected message type");

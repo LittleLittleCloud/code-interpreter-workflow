@@ -36,14 +36,15 @@ internal class Runner : IAgent, IDisposable
     public async Task<IMessage> GenerateReplyAsync(IEnumerable<IMessage> messages, GenerateReplyOptions? options = null, CancellationToken cancellationToken = default)
     {
         var lastMessage = messages.Last() ?? throw new InvalidOperationException("No message to reply to");
+        var lastState = messages.LastOrDefault()?.GetState();
 
-        if (lastMessage.GetState() is State runCodeMessage
-            && runCodeMessage.CurrentStep == Step.RunCode
-            && runCodeMessage.Task is string task
-            && runCodeMessage.Code is string code)
+        if (lastState is State runCode
+            && runCode.CurrentStep == Step.RunCode
+            && runCode.Task is string
+            && runCode.Code is string)
         {
             var sb = new StringBuilder();
-            var codeMessage = new TextMessage(Role.Assistant, code);
+            var codeMessage = new TextMessage(Role.Assistant, runCode.Code);
             // process python block
             foreach (var pythonCode in codeMessage.ExtractCodeBlocks("```python", "```"))
             {
@@ -101,15 +102,8 @@ internal class Runner : IAgent, IDisposable
 
             Console.WriteLine(sb.ToString());
             var codeExecutionResult = sb.ToString();
-            var state = new State
-            {
-                Code = code,
-                Task = task,
-                CurrentStep = Step.ExecuteResult,
-                Result = codeExecutionResult,
-            };
 
-            return state.ToTextMessage(this.Name);
+            return new TextMessage(Role.Assistant, codeExecutionResult, from: this.Name);
         }
 
         throw new InvalidOperationException("Unexpected message type");

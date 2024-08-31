@@ -2,6 +2,7 @@
 using AutoGen.DotnetInteractive.Extension;
 using Json.Schema.Generation;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace dotnet_interactive_agent;
 
@@ -9,14 +10,16 @@ public enum Step
 {
     CreateTask = 0,
     WriteCode = 1,
+    ReviewCode = 10,
+    FixComment = 11,
     RunCode = 2,
-    ExecuteResult = 3,
+    RunCodeResult = 3,
     Succeeded = 4,
     FixCodeError = 5,
     SearchSolution = 6,
     SearchSolutionResult = 7,
     ImproveCode = 8,
-    NotCodingTask = 9,
+    NotATask = 9,
 }
 
 [Title("state")]
@@ -24,6 +27,7 @@ public class State
 {
     [Description("current step")]
     [Required]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public Step CurrentStep { get; set; }
 
     [Description("task")]
@@ -36,7 +40,7 @@ public class State
     public string? Error { get; set; }
 
     [Description("code execution result")]
-    public string? Result { get; set; }
+    public string? RunCodeResult { get; set; }
 
     [Description("code review comment")]
     public string? Comment { get; set; }
@@ -46,35 +50,8 @@ public class State
 
     [Description("web search result")]
     public string? WebSearchResult { get; set; }
-}
 
-public class EventMessage : IMessage, ICanGetTextContent
-{
-    public EventMessage(Step type, IMessage message, Dictionary<string, string>? properties)
-    {
-        this.From = message.From;
-        Type = type;
-        Message = message;
-        Properties = properties ?? new Dictionary<string, string>();
-    }
-
-    public Dictionary<string, string> Properties { get; }
-
-    public IMessage Message { get; }
-
-    public Step Type { get; }
-
-    public string? From { get; set; }
-
-    public string? GetContent()
-    {
-        return Message.GetContent();
-    }
-
-    public override string ToString()
-    {
-        return Message?.ToString() ?? string.Empty;
-    }
+    public static State NOT_A_TASK = new State { CurrentStep = Step.NotATask };
 }
 
 public static class MessageExtension
@@ -120,40 +97,50 @@ public class STMOrchestrator : IOrchestrator
     private readonly IAgent assistant;
     private readonly IAgent runner;
     private readonly IAgent coder;
-    private readonly IAgent webSearch;
+    private readonly IAgent planner;
 
-    public STMOrchestrator(IAgent user, IAgent assistant, IAgent runner, IAgent coder, IAgent webSearch)
+    public STMOrchestrator(IAgent user, IAgent assistant, IAgent runner, IAgent coder, IAgent planner)
     {
         this.user = user;
         this.assistant = assistant;
         this.runner = runner;
         this.coder = coder;
-        this.webSearch = webSearch;
+        this.planner = planner;
     }
 
     public async Task<IAgent?> GetNextSpeakerAsync(OrchestrationContext context, CancellationToken cancellationToken = default)
     {
         var lastMessage = context.ChatHistory.LastOrDefault();
-        if (lastMessage is null)
+        var lastState = context.ChatHistory.LastOrDefault(x => x.From == this.planner.Name)?.GetState();
+
+        // start
+        if ((lastState is null
+            || lastState.CurrentStep == Step.NotATask
+            || lastState.CurrentStep == Step.Succeeded)
+            && lastMessage?.From == this.user.Name)
         {
-            return user;
+            return this.planner;
         }
 
-        if (lastMessage.GetState() is State eventMessage)
+        if (lastMessage?.From != this.planner.Name)
         {
-            return eventMessage.CurrentStep switch
+            return this.planner;
+        }
+
+        if (lastState is State state)
+        {
+            return state.CurrentStep switch
             {
-                Step.CreateTask => coder,
-                Step.WriteCode => user,
+                Step.CreateTask => user,
+                Step.WriteCode => coder,
                 Step.RunCode => runner,
-                Step.ExecuteResult => assistant,
-                Step.NotCodingTask => null,
-                Step.Succeeded => null,
+                Step.RunCodeResult => assistant,
+                Step.ReviewCode => user,
+                Step.NotATask => user,
+                Step.Succeeded => user,
                 Step.FixCodeError => coder,
-                Step.ImproveCode => coder,
-                Step.SearchSolution => webSearch,
-                Step.SearchSolutionResult => coder,
-                _ => throw new InvalidOperationException("Invalid event type"),
+                Step.FixComment => coder,
+                _ => throw new InvalidOperationException("Invalid state type"),
             };
         }
 

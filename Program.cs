@@ -46,19 +46,18 @@ var chatClient = openAIClient.GetChatClient(model);
 var BING_API_KEY = Environment.GetEnvironmentVariable("BING_API_KEY") ?? throw new ArgumentNullException("BING_API_KEY is not found");
 
 var coder = Coder.CreateFromOpenAI(chatClient);
-var planner = Planner.CreateFromOpenAI(chatClient);
 var assistant = Assistant.CreateFromOpenAI(chatClient);
 var runner = Runner.CreateFromOpenAI(kernel);
-var webSearch = WebSearch.CreateFromOpenAI(chatClient, BING_API_KEY);
+var planner = StatePlanner.CreateFromOpenAI(chatClient);
 
 // the user agent's name must match with ChatRoomServerConfiguration.YourName field.
 // When chatroom starts, it will be replaced by a built-in user agent.
 var userAgent = new DefaultReplyAgent("User", "<dummy>");
 
-var orchestrator = new STMOrchestrator(planner, assistant, runner, coder, webSearch);
+var orchestrator = new STMOrchestrator(userAgent, assistant, runner, coder, planner);
 
 var groupChat = new GroupChat(
-    members: [coder, planner, assistant, runner, userAgent, webSearch],
+    members: [coder, planner, assistant, runner, userAgent],
     orchestrator: orchestrator);
 
 // add weather groupchat to chatroom

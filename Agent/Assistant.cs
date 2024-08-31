@@ -36,52 +36,27 @@ internal class Assistant : IAgent
     public async Task<IMessage> GenerateReplyAsync(IEnumerable<IMessage> messages, GenerateReplyOptions? options = null, CancellationToken cancellationToken = default)
     {
         var lastMessage = messages.Last() ?? throw new InvalidOperationException("No message to reply to");
+        var lastState = messages.LastOrDefault()?.GetState();
 
-        if (lastMessage.GetState() is State runCodeResult
-            && runCodeResult.CurrentStep == Step.ExecuteResult
-            && runCodeResult.Task is string task
-            && runCodeResult.Result is string result
-            && runCodeResult.Code is string code)
+        if (lastState is State runCodeResult
+            && runCodeResult.CurrentStep == Step.RunCodeResult
+            && runCodeResult.Task is string
+            && runCodeResult.RunCodeResult is string
+            && runCodeResult.Code is string)
         {
             var prompt = $"""
                 You are a helpful assistant agent, you generate the final answer based on the code execution result.
                 
                 Here is the task:
-                {task}
+                {runCodeResult.Task}
                 
                 Here is the code execution result:
-                {result}
+                {runCodeResult.RunCodeResult}
 
                 If the code execute successfully, please generate the final answer. Otherwise, say 'code execution failed'.
                 """;
 
-            var reply = await this._innerAgent.SendAsync(prompt, [], cancellationToken);
-
-            if (reply.GetContent()?.ToLower().Contains("code execution failed") is true)
-            {
-                var fixCodeError = new State
-                {
-                    Code = code,
-                    Task = task,
-                    CurrentStep = Step.FixCodeError,
-                    Error = result,
-                };
-
-                return fixCodeError.ToTextMessage(this.Name);
-            }
-            else
-            {
-                var succeed = new State
-                {
-                    Code = code,
-                    Task = task,
-                    CurrentStep = Step.Succeeded,
-                    Result = result,
-                    Answer = reply.GetContent()!,
-                };
-
-                return succeed.ToTextMessage(this.Name);
-            }
+            return await this._innerAgent.SendAsync(prompt, [], cancellationToken);
         }
 
         throw new InvalidOperationException("Invalid message type");
