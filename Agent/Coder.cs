@@ -2,6 +2,7 @@
 using AutoGen.OpenAI;
 using AutoGen.OpenAI.Extension;
 using Azure.AI.OpenAI;
+using OpenAI.Chat;
 
 namespace dotnet_interactive_agent.Agent;
 
@@ -14,12 +15,11 @@ internal class Coder : IAgent
         _innerAgent = innerAgent;
     }
 
-    public static Coder CreateFromOpenAI(OpenAIClient client, string model, string name = "coder")
+    public static Coder CreateFromOpenAI(ChatClient client, string name = "coder")
     {
         var innerAgent = new OpenAIChatAgent(
-            openAIClient: client,
-            name: name,
-            modelName: model)
+            chatClient: client,
+            name: name)
         .RegisterMessageConnector()
         .RegisterPrintMessage();
 
@@ -32,9 +32,10 @@ internal class Coder : IAgent
     {
         var lastMessage = messages.Last() ?? throw new InvalidOperationException("No message to reply to");
 
-        if (lastMessage is EventMessage createTask && createTask.Type == EventType.CreateTask)
+        if (lastMessage.GetState() is State createTask
+            && createTask.CurrentStep == Step.CreateTask
+            && createTask.Task is string task)
         {
-            var task = createTask.Properties["task"];
             var prompt = $"""
                 You are a helpful coder agent, you resolve tasks using python, powershell or csharp code.
                 
@@ -67,25 +68,34 @@ internal class Coder : IAgent
 
             if (reply.GetContent()?.ToLower().Contains("i cannot resolve this task using code") is true)
             {
-                return reply.ToEventMessage(EventType.NotCodingTask);
+                var noCodingState = new State
+                {
+                    CurrentStep = Step.NotCodingTask,
+                    Task = task,
+                };
+
+                return noCodingState.ToTextMessage(this.Name);
             }
 
-            return reply.ToEventMessage(EventType.WriteCode, new Dictionary<string, string>()
+            var state = new State
             {
-                ["task"] = task,
-                ["code"] = reply.GetContent()!
-            });
+                CurrentStep = Step.WriteCode,
+                Task = task,
+                Code = reply.GetContent()!,
+            };
+
+            return state.ToTextMessage(this.Name);
         }
 
-        if (lastMessage is EventMessage fixCodeError && fixCodeError.Type == EventType.FixCodeError)
+        if (lastMessage.GetState() is State fixError
+            && fixError.CurrentStep == Step.FixCodeError
+            && fixError.Task is string task2
+            && fixError.Code is string code
+            && fixError.Error is string error)
         {
-            var task = fixCodeError.Properties["task"];
-            var code = fixCodeError.Properties["code"];
-            var error = fixCodeError.Properties["error"];
-
             var prompt = $"""
                 ### Task
-                {task}
+                {task2}
 
                 ### Code
                 {code}
@@ -106,32 +116,38 @@ internal class Coder : IAgent
 
             if (reply.GetContent()?.ToLower().Contains("search for solution") is true)
             {
-                return reply.ToEventMessage(EventType.SearchSolution, new Dictionary<string, string>()
+                var searchSolutionState = new State
                 {
-                    ["task"] = task,
-                    ["code"] = code,
-                    ["error"] = error,
-                });
+                    CurrentStep = Step.SearchSolution,
+                    Task = task2,
+                    Code = code,
+                    Error = error,
+                };
+
+                return searchSolutionState.ToTextMessage(this.Name);
             }
 
-            return reply.ToEventMessage(EventType.WriteCode, new Dictionary<string, string>()
+            var state = new State
             {
-                ["task"] = task,
-                ["code"] = reply.GetContent()!,
-            });
+                CurrentStep = Step.WriteCode,
+                Task = task2,
+                Code = reply.GetContent()!,
+            };
+
+            return state.ToTextMessage(this.Name);
         }
 
-        if (lastMessage is EventMessage improveCode && improveCode.Type == EventType.ImproveCode)
+        if (lastMessage.GetState() is State improveCode
+            && improveCode.CurrentStep == Step.ImproveCode
+            && improveCode.Code is string code2
+            && improveCode.Comment is string comment)
         {
-            var code = improveCode.Properties["code"];
-            var improvement = improveCode.Properties["improvement"];
-
             var prompt = $"""
                 ### Code
-                {code}
+                {code2}
 
                 ### Improvement
-                {improvement}
+                {comment}
 
                 Your task is to improve the code based on suggestions. Please write the improved code and put it in a code block.
 
@@ -141,12 +157,14 @@ internal class Coder : IAgent
                 """;
 
             var reply = await this._innerAgent.SendAsync(prompt, [], cancellationToken);
-
-            return reply.ToEventMessage(EventType.WriteCode, new Dictionary<string, string>()
+            var state = new State
             {
-                ["task"] = improveCode.Properties["task"],
-                ["code"] = reply.GetContent()!,
-            });
+                CurrentStep = Step.WriteCode,
+                Task = improveCode.Task,
+                Code = reply.GetContent()!,
+            };
+
+            return state.ToTextMessage(this.Name);
         }
 
         throw new InvalidOperationException("Unexpected message type");

@@ -11,6 +11,7 @@ using Microsoft.SemanticKernel.Plugins.Web;
 using Microsoft.SemanticKernel.Plugins.Web.Bing;
 using AutoGen.SemanticKernel;
 using Microsoft.SemanticKernel;
+using OpenAI.Chat;
 
 namespace dotnet_interactive_agent.Agent;
 
@@ -23,7 +24,7 @@ internal class WebSearch : IAgent
         _innerAgent = innerAgent;
     }
 
-    public static WebSearch CreateFromOpenAI(OpenAIClient client, string model, string bingApiKey, string name = "web-search")
+    public static WebSearch CreateFromOpenAI(ChatClient client, string bingApiKey, string name = "web-search")
     {
         var bingSearch = new BingConnector(bingApiKey);
         var webSearchPlugin = new WebSearchEnginePlugin(bingSearch);
@@ -34,9 +35,8 @@ internal class WebSearch : IAgent
             kernelPlugin: KernelPluginFactory.CreateFromObject(webSearchPlugin));
 
         var innerAgent = new OpenAIChatAgent(
-            openAIClient: client,
-            name: name,
-            modelName: model)
+            chatClient: client,
+            name: name)
             .RegisterMessageConnector()
             .RegisterMiddleware(skPluginMiddleware)
             .RegisterPrintMessage();
@@ -49,12 +49,12 @@ internal class WebSearch : IAgent
     {
         var lastMessage = messages.Last() ?? throw new InvalidOperationException("No message to reply to");
 
-        if (lastMessage is EventMessage searchSolution && searchSolution.Type is EventType.SearchSolution)
+        if (lastMessage.GetState() is State searchSolution
+            && searchSolution.CurrentStep == Step.SearchSolution
+            && searchSolution.Task is string task
+            && searchSolution.Code is string code
+            && searchSolution.Error is string error)
         {
-            var task = searchSolution.Properties["task"];
-            var code = searchSolution.Properties["code"];
-            var error = searchSolution.Properties["error"];
-
             var prompt = $"""
                 You are a helpful web search agent, you search the solution based on the task and code.
                 
@@ -72,13 +72,16 @@ internal class WebSearch : IAgent
 
             var reply = await this._innerAgent.SendAsync(prompt, [], cancellationToken);
 
-            return reply.ToEventMessage(EventType.SearchSolutionResult, new Dictionary<string, string>()
+            var state = new State
             {
-                ["task"] = task,
-                ["code"] = code,
-                ["error"] = error,
-                ["solution"] = reply.GetContent()!
-            });
+                CurrentStep = Step.SearchSolutionResult,
+                Task = task,
+                Code = code,
+                Error = error,
+                WebSearchResult = reply.GetContent()!
+            };
+
+            return state.ToTextMessage(this.Name);
         }
 
         throw new InvalidOperationException("Invalid message type");

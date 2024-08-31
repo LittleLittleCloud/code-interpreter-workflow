@@ -37,12 +37,15 @@ internal class Runner : IAgent, IDisposable
     {
         var lastMessage = messages.Last() ?? throw new InvalidOperationException("No message to reply to");
 
-        if (lastMessage is EventMessage runCodeMessage && runCodeMessage.Type == EventType.RunCode)
+        if (lastMessage.GetState() is State runCodeMessage
+            && runCodeMessage.CurrentStep == Step.RunCode
+            && runCodeMessage.Task is string task
+            && runCodeMessage.Code is string code)
         {
             var sb = new StringBuilder();
-
+            var codeMessage = new TextMessage(Role.Assistant, code);
             // process python block
-            foreach (var pythonCode in runCodeMessage.ExtractCodeBlocks("```python", "```"))
+            foreach (var pythonCode in codeMessage.ExtractCodeBlocks("```python", "```"))
             {
                 var codeResult = await this._kernel.RunSubmitCodeCommandAsync(pythonCode, "python", cancellationToken);
 
@@ -60,7 +63,7 @@ internal class Runner : IAgent, IDisposable
             }
 
             // process powershell block
-            foreach (var pwshCode in runCodeMessage.ExtractCodeBlocks("```pwsh", "```"))
+            foreach (var pwshCode in codeMessage.ExtractCodeBlocks("```pwsh", "```"))
             {
                 var codeResult = await this._kernel.RunSubmitCodeCommandAsync(pwshCode, "pwsh", cancellationToken);
 
@@ -79,7 +82,7 @@ internal class Runner : IAgent, IDisposable
 
 
             // process csharp block
-            foreach (var csharpCode in runCodeMessage.ExtractCodeBlocks("```csharp", "```"))
+            foreach (var csharpCode in codeMessage.ExtractCodeBlocks("```csharp", "```"))
             {
                 var codeResult = await this._kernel.RunSubmitCodeCommandAsync(csharpCode, "csharp", cancellationToken);
 
@@ -97,12 +100,16 @@ internal class Runner : IAgent, IDisposable
             }
 
             Console.WriteLine(sb.ToString());
-            return new TextMessage(Role.Assistant, sb.ToString(), this.Name)
-                .ToEventMessage(EventType.ExecuteResult, new Dictionary<string, string>()
-                {
-                    ["code"] = runCodeMessage.GetContent()!,
-                    ["task"] = runCodeMessage.Properties["task"],
-                });
+            var codeExecutionResult = sb.ToString();
+            var state = new State
+            {
+                Code = code,
+                Task = task,
+                CurrentStep = Step.ExecuteResult,
+                Result = codeExecutionResult,
+            };
+
+            return state.ToTextMessage(this.Name);
         }
 
         throw new InvalidOperationException("Unexpected message type");

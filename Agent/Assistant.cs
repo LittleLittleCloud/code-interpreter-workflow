@@ -2,6 +2,7 @@
 using AutoGen.OpenAI;
 using AutoGen.OpenAI.Extension;
 using Azure.AI.OpenAI;
+using OpenAI.Chat;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -19,12 +20,11 @@ internal class Assistant : IAgent
         _innerAgent = innerAgent;
     }
 
-    public static Assistant CreateFromOpenAI(OpenAIClient client, string model, string name = "assistant")
+    public static Assistant CreateFromOpenAI(ChatClient client, string name = "assistant")
     {
         var innerAgent = new OpenAIChatAgent(
-            openAIClient: client,
-            name: name,
-            modelName: model)
+            chatClient: client,
+            name: name)
         .RegisterMessageConnector()
         .RegisterPrintMessage();
 
@@ -37,11 +37,12 @@ internal class Assistant : IAgent
     {
         var lastMessage = messages.Last() ?? throw new InvalidOperationException("No message to reply to");
 
-        if (lastMessage is EventMessage runCodeResult && runCodeResult.Type == EventType.ExecuteResult)
+        if (lastMessage.GetState() is State runCodeResult
+            && runCodeResult.CurrentStep == Step.ExecuteResult
+            && runCodeResult.Task is string task
+            && runCodeResult.Result is string result
+            && runCodeResult.Code is string code)
         {
-            var task = runCodeResult.Properties["task"];
-            var result = runCodeResult.GetContent() ?? throw new InvalidOperationException("No content in the message");
-            var code = runCodeResult.Properties["code"];
             var prompt = $"""
                 You are a helpful assistant agent, you generate the final answer based on the code execution result.
                 
@@ -58,21 +59,28 @@ internal class Assistant : IAgent
 
             if (reply.GetContent()?.ToLower().Contains("code execution failed") is true)
             {
-                return reply.ToEventMessage(EventType.FixCodeError, new Dictionary<string, string>()
+                var fixCodeError = new State
                 {
-                    ["task"] = task,
-                    ["code"] = code,
-                    ["error"] = result,
-                });
+                    Code = code,
+                    Task = task,
+                    CurrentStep = Step.FixCodeError,
+                    Error = result,
+                };
+
+                return fixCodeError.ToTextMessage(this.Name);
             }
             else
             {
-                return reply.ToEventMessage(EventType.Succeeded, new Dictionary<string, string>()
+                var succeed = new State
                 {
-                    ["task"] = task,
-                    ["code"] = code,
-                    ["result"] = result,
-                });
+                    Code = code,
+                    Task = task,
+                    CurrentStep = Step.Succeeded,
+                    Result = result,
+                    Answer = reply.GetContent()!,
+                };
+
+                return succeed.ToTextMessage(this.Name);
             }
         }
 

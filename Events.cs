@@ -1,8 +1,11 @@
 ﻿using AutoGen.Core;
+using AutoGen.DotnetInteractive.Extension;
+using Json.Schema.Generation;
+using System.Text.Json;
 
 namespace dotnet_interactive_agent;
 
-public enum EventType
+public enum Step
 {
     CreateTask = 0,
     WriteCode = 1,
@@ -16,9 +19,38 @@ public enum EventType
     NotCodingTask = 9,
 }
 
+[Title("state")]
+public class State
+{
+    [Description("current step")]
+    [Required]
+    public Step CurrentStep { get; set; }
+
+    [Description("task")]
+    public string? Task { get; set; }
+
+    [Description("code")]
+    public string? Code { get; set; }
+
+    [Description("code execution error")]
+    public string? Error { get; set; }
+
+    [Description("code execution result")]
+    public string? Result { get; set; }
+
+    [Description("code review comment")]
+    public string? Comment { get; set; }
+
+    [Description("final answer")]
+    public string? Answer { get; set; }
+
+    [Description("web search result")]
+    public string? WebSearchResult { get; set; }
+}
+
 public class EventMessage : IMessage, ICanGetTextContent
 {
-    public EventMessage(EventType type, IMessage message, Dictionary<string, string>? properties)
+    public EventMessage(Step type, IMessage message, Dictionary<string, string>? properties)
     {
         this.From = message.From;
         Type = type;
@@ -30,7 +62,7 @@ public class EventMessage : IMessage, ICanGetTextContent
 
     public IMessage Message { get; }
 
-    public EventType Type { get; }
+    public Step Type { get; }
 
     public string? From { get; set; }
 
@@ -47,38 +79,42 @@ public class EventMessage : IMessage, ICanGetTextContent
 
 public static class MessageExtension
 {
-    public static EventMessage ToEventMessage(this IMessage message, EventType type, Dictionary<string, string>? properties = null)
+    public static State? GetState(this IMessage message)
     {
-        if (message is EventMessage em)
+        // if content contains ```task and ```, then it is a task message
+        if (message.ExtractCodeBlock("```task", "```") is string task)
         {
-            return new EventMessage(type, em.Message, properties);
+            return new State
+            {
+                CurrentStep = Step.CreateTask,
+                Task = task,
+            };
         }
 
-        return new EventMessage(type, message, properties);
-    }
-}
-
-public class EventMessageMiddleware : IMiddleware
-{
-    public string? Name => nameof(EventMessageMiddleware);
-
-    public async Task<IMessage> InvokeAsync(MiddlewareContext context, IAgent agent, CancellationToken cancellationToken = default)
-    {
-        var messages = context.Messages.Select(m =>
+        if (message.GetContent() is string json)
         {
-            return m switch
+            try
             {
-                EventMessage eventMessage => eventMessage.Message,
-                _ => m,
-            };
-        }).ToList();
+                return JsonSerializer.Deserialize<State>(json);
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
 
+        return null;
+    }
 
-        return await agent.GenerateReplyAsync(messages, context.Options, cancellationToken);
+    public static TextMessage ToTextMessage(this State state, string from)
+    {
+        var json = JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true });
+
+        return new TextMessage(Role.Assistant, json, from);
     }
 }
 
-public class EventDrivenOrchestrator : IOrchestrator
+public class STMOrchestrator : IOrchestrator
 {
     private readonly IAgent user;
     private readonly IAgent assistant;
@@ -86,7 +122,7 @@ public class EventDrivenOrchestrator : IOrchestrator
     private readonly IAgent coder;
     private readonly IAgent webSearch;
 
-    public EventDrivenOrchestrator(IAgent user, IAgent assistant, IAgent runner, IAgent coder, IAgent webSearch)
+    public STMOrchestrator(IAgent user, IAgent assistant, IAgent runner, IAgent coder, IAgent webSearch)
     {
         this.user = user;
         this.assistant = assistant;
@@ -103,20 +139,20 @@ public class EventDrivenOrchestrator : IOrchestrator
             return user;
         }
 
-        if (lastMessage is EventMessage eventMessage)
+        if (lastMessage.GetState() is State eventMessage)
         {
-            return eventMessage.Type switch
+            return eventMessage.CurrentStep switch
             {
-                EventType.CreateTask => coder,
-                EventType.WriteCode => user,
-                EventType.RunCode => runner,
-                EventType.ExecuteResult => assistant,
-                EventType.NotCodingTask => user,
-                EventType.Succeeded => user,
-                EventType.FixCodeError => coder,
-                EventType.ImproveCode => coder,
-                EventType.SearchSolution => webSearch,
-                EventType.SearchSolutionResult => coder,
+                Step.CreateTask => coder,
+                Step.WriteCode => user,
+                Step.RunCode => runner,
+                Step.ExecuteResult => assistant,
+                Step.NotCodingTask => null,
+                Step.Succeeded => null,
+                Step.FixCodeError => coder,
+                Step.ImproveCode => coder,
+                Step.SearchSolution => webSearch,
+                Step.SearchSolutionResult => coder,
                 _ => throw new InvalidOperationException("Invalid event type"),
             };
         }

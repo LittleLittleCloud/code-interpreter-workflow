@@ -2,6 +2,7 @@
 using AutoGen.OpenAI;
 using AutoGen.OpenAI.Extension;
 using Azure.AI.OpenAI;
+using OpenAI.Chat;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,24 +11,23 @@ using System.Threading.Tasks;
 
 namespace dotnet_interactive_agent.Agent;
 
-internal class User : IAgent
+internal class Planner : IAgent
 {
     private readonly IAgent _innerAgent;
-    public User(IAgent innerAgent)
+    public Planner(IAgent innerAgent)
     {
         _innerAgent = innerAgent;
     }
 
-    public static User CreateFromOpenAI(OpenAIClient client, string model, string name = "user")
+    public static Planner CreateFromOpenAI(ChatClient client, string name = "Planner")
     {
         var innerAgent = new OpenAIChatAgent(
-            openAIClient: client,
-            name: name,
-            modelName: model)
+            chatClient: client,
+            name: name)
         .RegisterMessageConnector()
         .RegisterPrintMessage();
 
-        return new User(innerAgent);
+        return new Planner(innerAgent);
     }
 
     public string Name => _innerAgent.Name;
@@ -36,11 +36,11 @@ internal class User : IAgent
     {
         var lastMessage = messages.Last() ?? throw new InvalidOperationException("No message to reply to");
 
-        if (lastMessage is EventMessage writeCode && writeCode.Type == EventType.WriteCode)
+        if (lastMessage.GetState() is State writeCode
+            && writeCode.CurrentStep == Step.WriteCode
+            && writeCode.Task is string task
+            && writeCode.Code is string code)
         {
-            var code = writeCode.GetContent() ?? throw new InvalidOperationException("No content in the message");
-            var task = writeCode.Properties["task"];
-
             var prompt = $"""
                 ### Code
                 {code}
@@ -58,20 +58,26 @@ internal class User : IAgent
 
             if (reply.GetContent()?.ToLower().Contains("the code is good") is true)
             {
-                return writeCode.ToEventMessage(EventType.RunCode, new Dictionary<string, string>()
+                var state = new State
                 {
-                    ["task"] = task,
-                    ["code"] = code,
-                });
+                    CurrentStep = Step.RunCode,
+                    Task = task,
+                    Code = code,
+                };
+
+                return state.ToTextMessage(this.Name);
             }
             else
             {
-                return reply.ToEventMessage(EventType.ImproveCode, new Dictionary<string, string>()
+                var state = new State
                 {
-                    ["task"] = task,
-                    ["code"] = code,
-                    ["improvement"] = reply.GetContent()!,
-                });
+                    CurrentStep = Step.ImproveCode,
+                    Task = task,
+                    Code = code,
+                    Comment = reply.GetContent()!,
+                };
+
+                return state.ToTextMessage(this.Name);
             }
         }
 
