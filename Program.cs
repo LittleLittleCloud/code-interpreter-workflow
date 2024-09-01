@@ -61,5 +61,5 @@ var groupChat = new GroupChat(
     orchestrator: orchestrator);
 
 // add weather groupchat to chatroom
-await client.RegisterAutoGenGroupChatAsync("dotnet-interactive-chat", groupChat);
+await client.RegisterAutoGenGroupChatAsync("dotnet-interactive-chatroom", groupChat);
 await host.WaitForShutdownAsync();
