@@ -11,15 +11,15 @@ using System.Threading.Tasks;
 namespace dotnet_interactive_agent.Agent;
 
 
-internal class StatePlanner : IAgent
+internal class Planner : IAgent
 {
     private readonly IAgent _innerAgent;
-    public StatePlanner(IAgent innerAgent)
+    public Planner(IAgent innerAgent)
     {
         _innerAgent = innerAgent;
     }
 
-    public static StatePlanner CreateFromOpenAI(ChatClient client, string name = "Planner")
+    public static Planner CreateFromOpenAI(ChatClient client, string name = "Planner")
     {
         var innerAgent = new OpenAIChatAgent(
             chatClient: client,
@@ -27,7 +27,7 @@ internal class StatePlanner : IAgent
         .RegisterMessageConnector()
         .RegisterPrintMessage();
 
-        return new StatePlanner(innerAgent);
+        return new Planner(innerAgent);
     }
 
     public string Name => _innerAgent.Name;

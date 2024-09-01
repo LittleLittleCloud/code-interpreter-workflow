@@ -13,10 +13,12 @@ var roomConfig = new RoomConfiguration
     Port = 30000,
 };
 
+var yourName = "User";
+
 var serverConfig = new ChatRoomServerConfiguration
 {
     RoomConfig = roomConfig,
-    YourName = "User",
+    YourName = yourName,
     ServerConfig = new ServerConfiguration
     {
         Urls = "http://localhost:50001",
@@ -39,78 +41,25 @@ using var kernel = DotnetInteractiveKernelBuilder
     .Build();
 
 var openAIApiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY") ?? throw new ArgumentNullException("OPENAI_API_KEY is not found");
-var model = "gpt-4o";
+var model = "gpt-4o-mini";
 var openAIClient = new OpenAIClient(openAIApiKey);
 var chatClient = openAIClient.GetChatClient(model);
-
-var BING_API_KEY = Environment.GetEnvironmentVariable("BING_API_KEY") ?? throw new ArgumentNullException("BING_API_KEY is not found");
 
 var coder = Coder.CreateFromOpenAI(chatClient);
 var assistant = Assistant.CreateFromOpenAI(chatClient);
 var runner = Runner.CreateFromOpenAI(kernel);
-var planner = StatePlanner.CreateFromOpenAI(chatClient);
+var planner = Planner.CreateFromOpenAI(chatClient);
 
 // the user agent's name must match with ChatRoomServerConfiguration.YourName field.
-// When chatroom starts, it will be replaced by a built-in user agent.
-var userAgent = new DefaultReplyAgent("User", "<dummy>");
+// When chatroom starts, it will be replaced by a built-in user agent which takes your input and sends it to groupchat.
+var userAgent = new DefaultReplyAgent(yourName, "<dummy>");
 
-var orchestrator = new STMOrchestrator(userAgent, assistant, runner, coder, planner);
+var orchestrator = new Orchestrator(userAgent, assistant, runner, coder, planner);
 
 var groupChat = new GroupChat(
     members: [coder, planner, assistant, runner, userAgent],
     orchestrator: orchestrator);
 
 // add weather groupchat to chatroom
-await client.RegisterAutoGenGroupChatAsync("code-chat", groupChat);
+await client.RegisterAutoGenGroupChatAsync("dotnet-interactive-chat", groupChat);
 await host.WaitForShutdownAsync();
-
-//var state = new State
-//{
-//    NextStep = Step.CreateTask,
-//    Task = task,
-//};
-
-//var chatHistory = new List<IMessage>()
-//{
-//    state.ToTextMessage(user.Name)
-//};
-
-//await foreach (var msg in groupChat.SendAsync(chatHistory, maxRound: 20))
-//{
-//    if (msg.GetState() is State finalReply
-//        && finalReply.NextStep == Step.Succeeded
-//        && finalReply.Task is string userTask
-//        && finalReply.Code is string code
-//        && finalReply.Result is string result
-//        && finalReply.Answer is string finalAnswer)
-//    {
-//        Console.WriteLine("Chat completed successfully");
-
-//        // code execution result
-
-//        finalAnswer = $"""
-//            Task:
-//            {userTask}
-
-//            Code:
-//            {code}
-
-//            Execution Result:
-//            {result}
-
-//            Final Answer:
-//            {finalAnswer}
-//            """;
-
-//        Console.WriteLine(finalAnswer);
-//        break;
-//    }
-
-//    if (msg.GetState() is State notCodeingState
-//        && notCodeingState.NextStep == Step.NotCodingTask)
-//    {
-//        Console.WriteLine("Exit chat because the task is not coding task");
-//        break;
-//    }
-//}
-

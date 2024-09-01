@@ -88,7 +88,7 @@ public static class MessageExtension
     }
 }
 
-public class STMOrchestrator : IOrchestrator
+public class Orchestrator : IOrchestrator
 {
     private readonly IAgent user;
     private readonly IAgent assistant;
@@ -96,7 +96,7 @@ public class STMOrchestrator : IOrchestrator
     private readonly IAgent coder;
     private readonly IAgent planner;
 
-    public STMOrchestrator(IAgent user, IAgent assistant, IAgent runner, IAgent coder, IAgent planner)
+    public Orchestrator(IAgent user, IAgent assistant, IAgent runner, IAgent coder, IAgent planner)
     {
         this.user = user;
         this.assistant = assistant;
