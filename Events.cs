@@ -8,18 +8,15 @@ namespace dotnet_interactive_agent;
 
 public enum Step
 {
-    CreateTask = 0,
-    WriteCode = 1,
-    ReviewCode = 10,
-    FixComment = 11,
-    RunCode = 2,
-    RunCodeResult = 3,
-    Succeeded = 4,
-    FixCodeError = 5,
-    SearchSolution = 6,
-    SearchSolutionResult = 7,
-    ImproveCode = 8,
-    NotATask = 9,
+    CreateTask,
+    WriteCode,
+    ReviewCode,
+    FixComment,
+    RunCode,
+    Succeeded,
+    FixCodeError,
+    NotATask,
+    Fail,
 }
 
 [Title("state")]
@@ -122,6 +119,11 @@ public class STMOrchestrator : IOrchestrator
             return this.planner;
         }
 
+        if (lastMessage?.From == this.assistant.Name)
+        {
+            return this.user;
+        }
+
         if (lastMessage?.From != this.planner.Name)
         {
             return this.planner;
@@ -134,12 +136,11 @@ public class STMOrchestrator : IOrchestrator
                 Step.CreateTask => user,
                 Step.WriteCode => coder,
                 Step.RunCode => runner,
-                Step.RunCodeResult => assistant,
-                Step.ReviewCode => user,
-                Step.NotATask => user,
-                Step.Succeeded => user,
                 Step.FixCodeError => coder,
                 Step.FixComment => coder,
+                Step.ReviewCode => assistant,
+                Step.NotATask => assistant,
+                Step.Succeeded => assistant,
                 _ => throw new InvalidOperationException("Invalid state type"),
             };
         }

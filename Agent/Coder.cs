@@ -60,8 +60,6 @@ internal class Coder : IAgent
 
                 Here is your task:
                 {task}
-
-                If the task can be resolved by writing code, please write the code. Otherwise, say 'I cannot resolve this task using code'.
                 """;
 
             return await this._innerAgent.SendAsync(prompt, [], cancellationToken);

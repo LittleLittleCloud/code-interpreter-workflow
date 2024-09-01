@@ -114,53 +114,56 @@ internal class StatePlanner : IAgent
             }
         }
 
-        // run_code -> run_code_result
+        // run_code
         if (lastState is State runCode
             && runCode.CurrentStep == Step.RunCode
             && runCode.Task is string
             && runCode.Code is string
             && lastMessage.GetContent() is string runCodeResult)
         {
-            return new State
-            {
-                CurrentStep = Step.RunCodeResult,
-                Task = runCode.Task,
-                Code = runCode.Code,
-                RunCodeResult = runCodeResult,
-            }.ToTextMessage(this.Name);
-        }
+            var prompt = $"""
+                # Task
+                {runCode.Task}
 
-        // run_code_result
-        if (lastState is State runCodeResultState
-            && runCodeResultState.CurrentStep == Step.RunCodeResult
-            && runCodeResultState.Task is string
-            && runCodeResultState.Code is string
-            && runCodeResultState.RunCodeResult is string
-            && lastMessage.GetContent() is string replyContent)
-        {
-            // run_code_result -> fix_code
-            if (replyContent.ToLower().Contains("code execution failed"))
+                # Code
+                ```
+                {runCode.Code}
+                ```
+
+                # Execute Result
+                ```
+                {runCodeResult}
+                ```
+
+                Does the code execution result solve the task? If yes, say 'succeed'. Otherwise, say 'fail'.
+                """;
+
+            var result = await this._innerAgent.SendAsync(prompt, [], cancellationToken);
+
+            if (result.GetContent()?.ToLower().Contains("succeed") is true)
             {
+                // run_code --> succeed
                 return new State
                 {
-                    CurrentStep = Step.FixCodeError,
-                    Task = runCodeResultState.Task,
-                    Code = runCodeResultState.Code,
-                    Error = replyContent,
+                    CurrentStep = Step.Succeeded,
+                    Task = runCode.Task,
+                    Code = runCode.Code,
+                    RunCodeResult = runCodeResult,
                 }.ToTextMessage(this.Name);
             }
             else
             {
-                // run_code_result -> succeed
+                // run_code --> fix_code
+
                 return new State
                 {
-                    CurrentStep = Step.Succeeded,
-                    Task = runCodeResultState.Task,
-                    Code = runCodeResultState.Code,
-                    RunCodeResult = runCodeResultState.RunCodeResult,
-                    Answer = replyContent,
+                    CurrentStep = Step.FixCodeError,
+                    Task = runCode.Task,
+                    Code = runCode.Code,
+                    Error = runCodeResult,
                 }.ToTextMessage(this.Name);
             }
+            // run_code --> fail
         }
 
         // fix_comment -> review_code
@@ -185,14 +188,13 @@ internal class StatePlanner : IAgent
             && fixCodeError.Task is string
             && fixCodeError.Code is string
             && fixCodeError.Error is string
-            && lastMessage.GetContent() is string error)
+            && lastMessage.GetContent() is string fixedCode)
         {
             return new State
             {
                 CurrentStep = Step.ReviewCode,
                 Task = fixCodeError.Task,
-                Code = fixCodeError.Code,
-                Error = error,
+                Code = fixedCode,
             }.ToTextMessage(this.Name);
         }
 
