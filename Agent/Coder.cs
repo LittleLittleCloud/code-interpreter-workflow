@@ -2,6 +2,7 @@
 using AutoGen.OpenAI;
 using AutoGen.OpenAI.Extension;
 using Azure.AI.OpenAI;
+using OpenAI.Chat;
 
 namespace dotnet_interactive_agent.Agent;
 
@@ -14,12 +15,11 @@ internal class Coder : IAgent
         _innerAgent = innerAgent;
     }
 
-    public static Coder CreateFromOpenAI(OpenAIClient client, string model, string name = "coder")
+    public static Coder CreateFromOpenAI(ChatClient client, string name = "coder")
     {
         var innerAgent = new OpenAIChatAgent(
-            openAIClient: client,
-            name: name,
-            modelName: model)
+            chatClient: client,
+            name: name)
         .RegisterMessageConnector()
         .RegisterPrintMessage();
 
@@ -31,10 +31,11 @@ internal class Coder : IAgent
     public async Task<IMessage> GenerateReplyAsync(IEnumerable<IMessage> messages, GenerateReplyOptions? options = null, CancellationToken cancellationToken = default)
     {
         var lastMessage = messages.Last() ?? throw new InvalidOperationException("No message to reply to");
-
-        if (lastMessage is EventMessage createTask && createTask.Type == EventType.CreateTask)
+        var lastState = messages.LastOrDefault()?.GetState();
+        if (lastState is State writeCode
+            && writeCode.CurrentStep == Step.WriteCode
+            && writeCode.Task is string task)
         {
-            var task = createTask.Properties["task"];
             var prompt = $"""
                 You are a helpful coder agent, you resolve tasks using python, powershell or csharp code.
                 
@@ -59,39 +60,26 @@ internal class Coder : IAgent
 
                 Here is your task:
                 {task}
-
-                If the task can be resolved by writing code, please write the code. Otherwise, say 'I cannot resolve this task using code'.
                 """;
 
-            var reply = await this._innerAgent.SendAsync(prompt, [], cancellationToken);
-
-            if (reply.GetContent()?.ToLower().Contains("i cannot resolve this task using code") is true)
-            {
-                return reply.ToEventMessage(EventType.NotCodingTask);
-            }
-
-            return reply.ToEventMessage(EventType.WriteCode, new Dictionary<string, string>()
-            {
-                ["task"] = task,
-                ["code"] = reply.GetContent()!
-            });
+            return await this._innerAgent.SendAsync(prompt, [], cancellationToken);
         }
 
-        if (lastMessage is EventMessage fixCodeError && fixCodeError.Type == EventType.FixCodeError)
+        if (lastState is State fixCode
+            && fixCode.CurrentStep == Step.FixCodeError
+            && fixCode.Task is string
+            && fixCode.Code is string
+            && fixCode.Error is string)
         {
-            var task = fixCodeError.Properties["task"];
-            var code = fixCodeError.Properties["code"];
-            var error = fixCodeError.Properties["error"];
-
             var prompt = $"""
                 ### Task
-                {task}
+                {fixCode.Task}
 
                 ### Code
-                {code}
+                {fixCode.Code}
 
                 ### Error
-                {error}
+                {fixCode.Error}
 
                 Your task is to fix the error in the code. Please write the corrected code and put it in a code block.
 
@@ -102,36 +90,20 @@ internal class Coder : IAgent
                 If you need search web for solution, say 'I need to search for solution'.
                 """;
 
-            var reply = await this._innerAgent.SendAsync(prompt, [], cancellationToken);
-
-            if (reply.GetContent()?.ToLower().Contains("search for solution") is true)
-            {
-                return reply.ToEventMessage(EventType.SearchSolution, new Dictionary<string, string>()
-                {
-                    ["task"] = task,
-                    ["code"] = code,
-                    ["error"] = error,
-                });
-            }
-
-            return reply.ToEventMessage(EventType.WriteCode, new Dictionary<string, string>()
-            {
-                ["task"] = task,
-                ["code"] = reply.GetContent()!,
-            });
+            return await this._innerAgent.SendAsync(prompt, [], cancellationToken);
         }
 
-        if (lastMessage is EventMessage improveCode && improveCode.Type == EventType.ImproveCode)
+        if (lastState is State fixComment
+            && fixComment.CurrentStep == Step.FixComment
+            && fixComment.Code is string
+            && fixComment.Comment is string)
         {
-            var code = improveCode.Properties["code"];
-            var improvement = improveCode.Properties["improvement"];
-
             var prompt = $"""
                 ### Code
-                {code}
+                {fixComment.Code}
 
                 ### Improvement
-                {improvement}
+                {fixComment.Comment}
 
                 Your task is to improve the code based on suggestions. Please write the improved code and put it in a code block.
 
@@ -140,13 +112,7 @@ internal class Coder : IAgent
                 ```
                 """;
 
-            var reply = await this._innerAgent.SendAsync(prompt, [], cancellationToken);
-
-            return reply.ToEventMessage(EventType.WriteCode, new Dictionary<string, string>()
-            {
-                ["task"] = improveCode.Properties["task"],
-                ["code"] = reply.GetContent()!,
-            });
+            return await this._innerAgent.SendAsync(prompt, [], cancellationToken);
         }
 
         throw new InvalidOperationException("Unexpected message type");

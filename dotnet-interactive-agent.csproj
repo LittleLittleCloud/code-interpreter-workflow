@@ -6,13 +6,15 @@
     <RootNamespace>dotnet_interactive_agent</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-	  <NoWarn>SKEXP0050</NoWarn>
+	  <NoWarn>SKEXP0050;NU1605</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
-	  <PackageReference Include="AutoGen" Version="0.1.0" />
-	  <PackageReference Include="AutoGen.DotnetInteractive" Version="0.1.0" />
-	  <PackageReference Include="AutoGen.SourceGenerator" Version="0.1.0" />
+	  <PackageReference Include="AutoGen" Version="0.1.0-nightly-10635437896" />
+	  <PackageReference Include="AutoGen.DotnetInteractive" Version="0.1.0-nightly-10635437896" />
+	  <PackageReference Include="AutoGen.SourceGenerator" Version="0.1.0-nightly-10635437896" />
+	  <PackageReference Include="ChatRoom.SDK" Version="0.5.0" />
+	  <PackageReference Include="ChatRoom.StaticWebUI" Version="0.5.0" />
 	  <PackageReference Include="Microsoft.PowerShell.SDK" Version="7.4.4" />
 	  <PackageReference Include="Microsoft.SemanticKernel.Plugins.Web" Version="1.16.1-alpha" />
   </ItemGroup>
