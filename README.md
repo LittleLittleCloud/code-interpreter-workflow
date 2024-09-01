@@ -1,6 +1,6 @@
 ## Human-in-the-loop Code Interpreter workflow
 
-[demo](asset/screenshot.png)
+![demo](asset/screenshot.png)
 
 ## Get start
 ### Pre-requisite
